@@ -202,6 +202,11 @@ class EC2Command
 	# Connect to a named instance over ssh
 	def ssh args
 		info = @all_instances.get_instance(args.first)
+
+		if !info
+			puts "Instance name not recognized."
+			exit
+		end
 		
 		username = 'root'
 		if info[:ssh_key_name] =~ /ubuntu-images/
