@@ -122,7 +122,11 @@ class EC2Instances
 	def hostname_to_ip hostname
 		# Parse the hostname rather than doing a (slow) DNS lookup
 		fields = hostname.split "-"
-		return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
+		if fields.size > 0
+		  return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
+		else
+		  return ""
+		end
 	end
 
 	def ssh_key_real_path key, path
