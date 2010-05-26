@@ -123,9 +123,9 @@ class EC2Instances
 		# Parse the hostname rather than doing a (slow) DNS lookup
 		fields = hostname.split "-"
 		if fields.size > 0
-		  return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
+			return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{(fields[4]||'').gsub(/\..*/,'')}"
 		else
-		  return ""
+			return ""
 		end
 	end
 
