@@ -393,7 +393,8 @@ begin
 	end
 rescue RuntimeError => e
 	# Generally we don't want the stack trace for our errors
-	STDERR.puts e.to_s
+  STDERR.puts e.to_s
+  exit 1
 end
 
 # Usage for the main command object
