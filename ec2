@@ -147,10 +147,8 @@ end
 
 class EC2Instance < Hash
 
-	def initialize(hash)
-		hash.each do |key, val|
-			self[key] = val
-		end
+	def initialize hash
+		self.merge! hash
 	end
 	
 	def username
