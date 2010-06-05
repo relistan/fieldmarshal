@@ -145,31 +145,33 @@ class EC2Instances
 
 end
 
-      class EC2Instance < Hash
-        def initialize(hash)
-          hash.each do |key, val|
-            self[key] = val
-          end
-        end
-        
-        def username
-          self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
-        end
+class EC2Instance < Hash
 
-        def friendly_name
-          $all_instances.ids_to_names[aws_instance_id] || aws_instance_id
-        end
+	def initialize(hash)
+		hash.each do |key, val|
+			self[key] = val
+		end
+	end
+	
+	def username
+		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
+	end
 
-        def key
-          $all_instances.ssh_key_real_path ssh_key_name, $config['ssh_key_path']
-        end
+	def friendly_name
+		$all_instances.ids_to_names[aws_instance_id] || aws_instance_id
+	end
 
-        def method_missing(method, *params)  
-          method = method.to_sym  
-          return self[method] if self.keys.collect(&:to_sym).include?(method)  
-          super  
-        end  
-      end
+	def key
+		$all_instances.ssh_key_real_path ssh_key_name, $config['ssh_key_path']
+	end
+
+	def method_missing(method, *params)	
+		method = method.to_sym	
+		return self[method] if self.keys.collect(&:to_sym).include?(method)	
+		super	
+	end	
+
+end
 
       
 class EC2Command
@@ -323,15 +325,15 @@ class EC2Command
 		end
 	end
 
-        # Write hosts to STDOUT
-        def ssh_config(*args)
-          collection = $all_instances.info
-          strings = collection.keys.map do |instance_name|
-            instance = EC2Instance.new(collection[instance_name])
-            "Host #{instance.friendly_name}\n  IdentityFile #{instance.key}\n  HostName #{instance.dns_name}\n  User #{instance.username}"
-          end
-          puts strings.join("\n\n")
-        end
+	# Write hosts to STDOUT
+	def ssh_config(*args)
+		collection = $all_instances.info
+		strings = collection.keys.map do |instance_name|
+			instance = EC2Instance.new(collection[instance_name])
+			"Host #{instance.friendly_name}\n	IdentityFile #{instance.key}\n	HostName #{instance.dns_name}\n	User #{instance.username}"
+		end
+		puts strings.join("\n\n")
+	end
 end
 
 
