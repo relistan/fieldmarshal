@@ -74,7 +74,7 @@ class EC2Instances
 		@raw_info ||= ec2.describe_instances
 
 		@parsed_info = {}
-		@raw_info.each {|entry| @parsed_info[entry[:aws_instance_id]] = entry}
+		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
 
 		return @parsed_info
 	end
@@ -132,6 +132,7 @@ class EC2Instances
 
 	def ssh_key_real_path key, path
 		# Oh, the horror
+		path = File.expand_path path
 		if File.exist?(File.join(path, key))
 			key = File.join(path, key)
 		elsif File.exist?(File.join(path, "#{key}.pem"))
@@ -170,7 +171,6 @@ class EC2Instance < Hash
 	end	
 
 end
-
       
 class EC2Command
 
