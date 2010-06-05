@@ -18,8 +18,13 @@ class SDB
 
 	def initialize 
 		# This does not actually stay connected, it's stateless
-		@b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
+		b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
 		@sdb_domain = @b.domain 'ec2_names'
+
+		if @sdb_domain.nil?
+			# Try to make a new domain if we can't find an existing one
+			@sdb_domain = b.create_domain 'ec2_names'
+		end
 
 		if @sdb_domain.nil?
 			raise SocketError, "Unable to connect to ec2_names domain on SDB."
