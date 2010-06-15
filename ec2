@@ -384,37 +384,40 @@ if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
 	end
 end
 
-# Command names
-begin
-	if ARGV.size > 0
-		if command.respond_to? ARGV[0]
-			command.send ARGV[0], ARGV[1..ARGV.size]
-			exit
-		else
-			puts "Invalid command."
+if $0 !~ /spec$/
+	
+	# Command names
+	begin
+		if ARGV.size > 0
+			if command.respond_to? ARGV[0]
+				command.send ARGV[0], ARGV[1..ARGV.size]
+				exit
+			else
+				puts "Invalid command."
+			end
 		end
+	rescue RuntimeError => e
+		# Generally we don't want the stack trace for our errors
+	  STDERR.puts e.to_s
+	  exit 1
 	end
-rescue RuntimeError => e
-	# Generally we don't want the stack trace for our errors
-  STDERR.puts e.to_s
-  exit 1
-end
-
-# Usage for the main command object
-puts "Usage: ec2 [command]"
-puts "	Commands:"
-puts "	  - list 	--> List instances"
-puts "	  - name	--> Set a name or get the instance ID for a name"
-puts "	  - ssh		--> Connect to the instance over ssh"
-puts "	  - scp		--> Copy a file to or from the instance using scp"
-puts "	  - http	--> Connect to port 80 on the instance in a web browser"
-puts "	  - config	--> Edit existing or a create new configuration file"
-puts "	  - ssh_config	--> List hosts in an ssh_config friendly format"
-
-# Usage for plugins
-$plugins.each do |plugin|
-	usage_method = "#{plugin}_usage"
-	if command.respond_to? usage_method
-		command.send usage_method
+	
+	# Usage for the main command object
+	puts "Usage: ec2 [command]"
+	puts "	Commands:"
+	puts "	  - list 	--> List instances"
+	puts "	  - name	--> Set a name or get the instance ID for a name"
+	puts "	  - ssh		--> Connect to the instance over ssh"
+	puts "	  - scp		--> Copy a file to or from the instance using scp"
+	puts "	  - http	--> Connect to port 80 on the instance in a web browser"
+	puts "	  - config	--> Edit existing or a create new configuration file"
+	puts "	  - ssh_config	--> List hosts in an ssh_config friendly format"
+	
+	# Usage for plugins
+	$plugins.each do |plugin|
+		usage_method = "#{plugin}_usage"
+		if command.respond_to? usage_method
+			command.send usage_method
+		end
 	end
 end
