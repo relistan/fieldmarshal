@@ -1,8 +1,13 @@
+# fieldmarshal
+
+### Functionality
 Field Marshal is a simple tool to manage EC2 instances for a single
 user or across a team.  The main functionality revolves around
 shared naming for instances across a team so they can be accessed
-by a common name.  Simple running 'ec2' will list the options
-available.  E.g.
+by a common name.  
+
+### Running
+Simple running 'ec2' will list the options available.  E.g.
 
 Usage: ec2 [command]
 	Commands:
