@@ -15,4 +15,5 @@ describe EC2Instances do
 	it "should have information about EC2 instances" do
 		$all_instances.info.keys.size.should have_at_least(1).items
 	end
+
 end

@@ -50,6 +50,16 @@ class SDB
 		@sdb_domain.put_attributes(name, values)
 	end
 
+	def delete_attributes name
+		entry = nil
+		begin
+			entry = @sdb_domain.get_attributes name
+			entry.destroy!
+		rescue Amazon::SDB::RecordNotFoundError
+			# do nothing
+		end
+	end
+
 	def get_all
 		@sdb_domain.query
 	end
