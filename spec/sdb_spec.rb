@@ -5,6 +5,7 @@ describe SDB do
 	before :each do
 		@sdb = SDB.new
 		@name = 'test_entry'
+		@nonexistant_name = 'nonesuch-123-123-123'
 		@attributes = { :name => 'test', :value => 'testing 123 123' }
 	end
 
@@ -22,6 +23,10 @@ describe SDB do
 		@sdb.get_attributes(@name).should have_key('name')
 	end
 
+	it "should not raise an exception if getting attributes that don't exist" do
+		@sdb.get_attributes(@nonexistant_name)
+	end
+
 	it "should retrieve all entries" do
 		@sdb.put_attributes @name, @attributes
 		@sdb.get_all.size.should have_at_least(1).items
@@ -31,6 +36,10 @@ describe SDB do
 		@sdb.delete_attributes @name
 		sleep 0.5 # non-deterministic, otherwise -- SDB is not atomic, it seems
 		@sdb.get_attributes(@name).keys.should have(0).items
+	end
+
+	it "should not raise an exception if deleting attributes that don't exist" do
+		@sdb.delete_attributes @nonexistant_name
 	end
 
 end
