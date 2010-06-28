@@ -73,6 +73,7 @@ class EC2Instances
 	end
 
 	def ec2
+
 		@ec2 ||= RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], 
 			{ :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) } 
 		)
@@ -85,8 +86,16 @@ class EC2Instances
 	end
 
 	def info
-		return @parsed_info if @parsed_info
-		@raw_info ||= ec2.describe_instances
+                return @parsed_info if @parsed_info
+
+                old = $stderr
+                $stderr = StringIO.new
+
+                begin
+                  @raw_info ||= ec2.describe_instances
+                ensure
+                  $stderr = old
+                end
 
 		@parsed_info = {}
 		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
@@ -221,7 +230,6 @@ class EC2Command
 	# Show all instances, with nice names when available
 	def list not_used
 		info = $all_instances.info
-
 		puts "-"*95
 		puts "Instance	AMI		Key		Size		Date		Public IP"
 		puts "-"*95
