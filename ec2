@@ -13,7 +13,11 @@ require 'amazon_sdb'
 require 'right_aws'
 require 'yaml'
 
+# Give RightAWS the certificate authority file to avoid warnings and be more secure
+Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.dirname(__FILE__)), 'ca-certificates.crt')
+
 $all_instances = nil
+
 class SDB
 
 	def initialize 
