@@ -9,6 +9,8 @@
 # create it for the first time.
 
 require 'rubygems'
+require 'bundler'
+Bundler.setup
 require 'amazon_sdb'
 require 'right_aws'
 require 'yaml'
