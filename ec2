@@ -89,17 +89,15 @@ class EC2Instances
 		@sdb = SDB.new 
 	end
 
+        def self.ec2_object
+          @ec2 ||= begin
+                     options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
+                     RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
+                   end
+        end
+
 	def ec2
-
-		@ec2 ||= RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], 
-			{ :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) } 
-		)
-
-		if @ec2.nil?
-			raise SocketError, "Unable to connect to EC2 API."
-		end
-
-		return @ec2
+          self.class.ec2_object
 	end
 
 	def info
@@ -218,6 +216,10 @@ class EC2Command
 	def initialize 
 		$all_instances = EC2Instances.new 
 	end
+
+        def ec2
+          EC2Instances.ec2_object
+        end
 
 	# Get and set EC2 instance names
 	def name args
