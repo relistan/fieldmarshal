@@ -20,6 +20,17 @@ Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.di
 
 $all_instances = nil
 
+class String
+  def underscore
+    self.gsub(/::/, '/').
+      gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
+      gsub(/([a-z\d])([A-Z])/,'\1_\2').
+      tr("-", "_").
+      downcase
+  end
+end
+
+
 class SDB
 
 	def initialize 
@@ -429,19 +440,18 @@ if $0 !~ /spec$/
 	# Usage for the main command object
 	puts "Usage: ec2 [command]"
 	puts "	Commands:"
-	puts "	  - list 	--> List instances"
-	puts "	  - name	--> Set a name or get the instance ID for a name"
-	puts "	  - ssh		--> Connect to the instance over ssh"
-	puts "	  - scp		--> Copy a file to or from the instance using scp"
-	puts "	  - http	--> Connect to port 80 on the instance in a web browser"
-	puts "	  - config	--> Edit existing or a create new configuration file"
-	puts "	  - ssh_config	--> List hosts in an ssh_config friendly format"
-	
-	# Usage for plugins
-	$plugins.each do |plugin|
-		usage_method = "#{plugin}_usage"
-		if command.respond_to? usage_method
-			command.send usage_method
-		end
-	end
+	puts "	  - list         --> List instances"
+	puts "	  - name         --> Set a name or get the instance ID for a name"
+	puts "	  - ssh          --> Connect to the instance over ssh"
+	puts "	  - scp          --> Copy a file to or from the instance using scp"
+	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
+	puts "	  - config       --> Edit existing or a create new configuration file"
+	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
+
+  $plugins.each do |plugin|
+    usage_method = "#{plugin.to_s.underscore}_usage"
+    if command.respond_to? usage_method
+      command.send usage_method
+    end
+  end
 end
