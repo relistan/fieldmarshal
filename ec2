@@ -8,10 +8,21 @@
 # Many values are read from the YAML config ~/.ec2rc.  Run 'ec2 config' to
 # create it for the first time.
 
+# Help bundler find the gemfile, which is in the same path as the executable.
+# Doesn't work with symlinked executable...
+ENV['BUNDLE_GEMFILE'] = File.join(File.dirname(__FILE__), "Gemfile")
+ENV['BUNDLE_PATH'] = File.join(File.dirname(__FILE__), ".bundle")
 require 'rubygems'
+require 'bundler'
+Bundler.setup
 require 'amazon_sdb'
 require 'right_aws'
 require 'yaml'
+
+# Give RightAWS the certificate authority file to avoid warnings and be more secure
+Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.dirname(__FILE__)), 'ca-certificates.crt')
+
+$all_instances = nil
 
 class SDB
 
@@ -19,6 +30,11 @@ class SDB
 		# This does not actually stay connected, it's stateless
 		@b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
 		@sdb_domain = @b.domain 'ec2_names'
+
+		if @sdb_domain.nil?
+			# Try to make a new domain if we can't find an existing one
+			@sdb_domain = b.create_domain 'ec2_names'
+		end
 
 		if @sdb_domain.nil?
 			raise SocketError, "Unable to connect to ec2_names domain on SDB."
@@ -42,6 +58,16 @@ class SDB
 		attrs.each { |key, value| values[key] = value }
 
 		@sdb_domain.put_attributes(name, values)
+	end
+
+	def delete_attributes name
+		entry = nil
+		begin
+			entry = @sdb_domain.get_attributes name
+			entry.destroy!
+		rescue Amazon::SDB::RecordNotFoundError
+			# do nothing
+		end
 	end
 
 	def get_all
@@ -73,7 +99,7 @@ class EC2Instances
 		@raw_info ||= ec2.describe_instances
 
 		@parsed_info = {}
-		@raw_info.each {|entry| @parsed_info[entry[:aws_instance_id]] = entry}
+		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
 
 		return @parsed_info
 	end
@@ -131,6 +157,7 @@ class EC2Instances
 
 	def ssh_key_real_path key, path
 		# Oh, the horror
+		path = File.expand_path path
 		if File.exist?(File.join(path, key))
 			key = File.join(path, key)
 		elsif File.exist?(File.join(path, "#{key}.pem"))
@@ -144,11 +171,36 @@ class EC2Instances
 
 end
 
+class EC2Instance < Hash
 
+	def initialize hash
+		self.merge! hash
+	end
+	
+	def username
+		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
+	end
+
+	def friendly_name
+		$all_instances.ids_to_names[aws_instance_id] || aws_instance_id
+	end
+
+	def key
+		$all_instances.ssh_key_real_path ssh_key_name, $config['ssh_key_path']
+	end
+
+	def method_missing(method, *params)	
+		method = method.to_sym	
+		return self[method] if self.keys.collect(&:to_sym).include?(method)	
+		super	
+	end	
+
+end
+      
 class EC2Command
 
 	def initialize 
-		@all_instances = EC2Instances.new 
+		$all_instances = EC2Instances.new 
 	end
 
 	# Get and set EC2 instance names
@@ -156,9 +208,9 @@ class EC2Command
 		if args.size == 1
 
 			begin
-				puts @all_instances.id_for_name args[0]
+				puts $all_instances.id_for_name args[0]
 			rescue SocketError => e
-				raise RuntimeError,"Can't connect to Amazon SDB.  No connectivity?"
+				raise RuntimeError,"Can't connect to Amazon SDB.  No connectivity? "
 		    rescue RuntimeError => e
 				STDERR.puts "Not an instance name."
 			end
@@ -166,8 +218,8 @@ class EC2Command
 
 		elsif args.size == 2
 
-			@all_instances = EC2Instances.new 
-			@all_instances.name_instance(args[0], args[1])
+			$all_instances = EC2Instances.new 
+			$all_instances.name_instance(args[0], args[1])
 			return
 
 		end
@@ -178,7 +230,7 @@ class EC2Command
 	
 	# Show all instances, with nice names when available
 	def list not_used
-		info = @all_instances.info
+		info = $all_instances.info
 
 		puts "-"*95
 		puts "Instance	AMI		Key		Size		Date		Public IP"
@@ -186,15 +238,15 @@ class EC2Command
 
 		all = info.keys.map do |key|
 			entry = info[key]
-			name = @all_instances.ids_to_names[entry[:aws_instance_id]] ?
-				@all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
+			name = $all_instances.ids_to_names[entry[:aws_instance_id]] ?
+				$all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
 			[
 				sprintf("%-15s", name), 	
 				entry[:aws_image_id], 
 				sprintf("%13s", entry[:ssh_key_name]),
 				entry[:aws_instance_type],
 				entry[:aws_launch_time].gsub!(/T.*$/, ''),
-				@all_instances.hostname_to_ip(entry[:dns_name])
+				$all_instances.hostname_to_ip(entry[:dns_name])
 			]
 		end
 
@@ -205,7 +257,7 @@ class EC2Command
 	
 	# Connect to a named instance over ssh
 	def ssh args
-		info = @all_instances.get_instance(args.first)
+		info = $all_instances.get_instance(args.first)
 
 		if !info
 			puts "Instance name not recognized."
@@ -217,7 +269,7 @@ class EC2Command
 			username = 'ubuntu'
 		end
 	
-		key = @all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
+		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
 	
 		# Call SSH and pass through all the other ssh options
 		exec "ssh -i #{key} #{username}@#{info[:dns_name]} #{args[1..args.size].join(' ')}"
@@ -234,7 +286,7 @@ class EC2Command
 		hostname, file = host.first.split(':')
 	
 		begin
-			info = @all_instances.get_instance(hostname)
+			info = $all_instances.get_instance(hostname)
 		rescue Amazon::SDB::RecordNotFoundError => e
 			# Make it a general error so we can capture it upstream
 			raise RuntimeError, e.to_s
@@ -245,7 +297,7 @@ class EC2Command
 			username = 'ubuntu'
 		end
 	
-		key = @all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
+		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
 		instance_ip = info[:dns_name]
 	
 		filtered_args = args.map { |a| a.sub(hostname, "#{username}@#{instance_ip}") }
@@ -256,7 +308,7 @@ class EC2Command
 
 	# OSX-specific: open browser to instance, using HTTP on port 80
 	def http args
-		info = @all_instances.get_instance(args.first)
+		info = $all_instances.get_instance(args.first)
 
 		if info.nil?
 			raise RuntimeError, "Can't find host from command string"
@@ -296,6 +348,15 @@ class EC2Command
 		end
 	end
 
+	# Write hosts to STDOUT
+	def ssh_config(*args)
+		collection = $all_instances.info
+		strings = collection.keys.map do |instance_name|
+			instance = EC2Instance.new(collection[instance_name])
+			"Host #{instance.friendly_name}\n	IdentityFile #{instance.key}\n	HostName #{instance.dns_name}\n	User #{instance.username}"
+		end
+		puts strings.join("\n\n")
+	end
 end
 
 
@@ -343,35 +404,40 @@ if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
 	end
 end
 
-# Command names
-begin
-	if ARGV.size > 0
-		if command.respond_to? ARGV[0]
-			command.send ARGV[0], ARGV[1..ARGV.size]
-			exit
-		else
-			puts "Invalid command."
+if $0 !~ /spec$/
+	
+	# Command names
+	begin
+		if ARGV.size > 0
+			if command.respond_to? ARGV[0]
+				command.send ARGV[0], ARGV[1..ARGV.size]
+				exit
+			else
+				puts "Invalid command."
+			end
 		end
+	rescue RuntimeError => e
+		# Generally we don't want the stack trace for our errors
+	  STDERR.puts e.to_s
+	  exit 1
 	end
-rescue RuntimeError => e
-	# Generally we don't want the stack trace for our errors
-	STDERR.puts e.to_s
-end
-
-# Usage for the main command object
-puts "Usage: ec2 [command]"
-puts "	Commands:"
-puts "	  - list 	--> List instances"
-puts "	  - name	--> Set a name or get the instance ID for a name"
-puts "	  - ssh		--> Connect to the instance over ssh"
-puts "	  - scp		--> Copy a file to or from the instance using scp"
-puts "	  - http	--> Connect to port 80 on the instance in a web browser"
-puts "	  - config	--> Edit existing or a create new configuration file"
-
-# Usage for plugins
-$plugins.each do |plugin|
-	usage_method = "#{plugin}_usage"
-	if command.respond_to? usage_method
-		command.send usage_method
+	
+	# Usage for the main command object
+	puts "Usage: ec2 [command]"
+	puts "	Commands:"
+	puts "	  - list 	--> List instances"
+	puts "	  - name	--> Set a name or get the instance ID for a name"
+	puts "	  - ssh		--> Connect to the instance over ssh"
+	puts "	  - scp		--> Copy a file to or from the instance using scp"
+	puts "	  - http	--> Connect to port 80 on the instance in a web browser"
+	puts "	  - config	--> Edit existing or a create new configuration file"
+	puts "	  - ssh_config	--> List hosts in an ssh_config friendly format"
+	
+	# Usage for plugins
+	$plugins.each do |plugin|
+		usage_method = "#{plugin}_usage"
+		if command.respond_to? usage_method
+			command.send usage_method
+		end
 	end
 end
