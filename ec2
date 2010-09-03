@@ -10,11 +10,7 @@
 
 # Help bundler find the gemfile, which is in the same path as the executable.
 # Doesn't work with symlinked executable...
-ENV['BUNDLE_GEMFILE'] = File.join(File.dirname(__FILE__), "Gemfile")
-ENV['BUNDLE_PATH'] = File.join(File.dirname(__FILE__), ".bundle")
 require 'rubygems'
-require 'bundler'
-Bundler.setup
 require 'amazon_sdb'
 require 'right_aws'
 require 'yaml'
@@ -23,6 +19,17 @@ require 'yaml'
 Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.dirname(__FILE__)), 'ca-certificates.crt')
 
 $all_instances = nil
+
+class String
+  def underscore
+    self.gsub(/::/, '/').
+      gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
+      gsub(/([a-z\d])([A-Z])/,'\1_\2').
+      tr("-", "_").
+      downcase
+  end
+end
+
 
 class SDB
 
@@ -82,21 +89,28 @@ class EC2Instances
 		@sdb = SDB.new 
 	end
 
+        def self.ec2_object
+          @ec2 ||= begin
+                     options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
+                     RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
+                   end
+        end
+
 	def ec2
-		@ec2 ||= RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], 
-			{ :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) } 
-		)
-
-		if @ec2.nil?
-			raise SocketError, "Unable to connect to EC2 API."
-		end
-
-		return @ec2
+          self.class.ec2_object
 	end
 
 	def info
-		return @parsed_info if @parsed_info
-		@raw_info ||= ec2.describe_instances
+                return @parsed_info if @parsed_info
+
+                old = $stderr
+                $stderr = StringIO.new
+
+                begin
+                  @raw_info ||= ec2.describe_instances
+                ensure
+                  $stderr = old
+                end
 
 		@parsed_info = {}
 		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
@@ -203,6 +217,10 @@ class EC2Command
 		$all_instances = EC2Instances.new 
 	end
 
+        def ec2
+          EC2Instances.ec2_object
+        end
+
 	# Get and set EC2 instance names
 	def name args
 		if args.size == 1
@@ -231,7 +249,6 @@ class EC2Command
 	# Show all instances, with nice names when available
 	def list not_used
 		info = $all_instances.info
-
 		puts "-"*95
 		puts "Instance	AMI		Key		Size		Date		Public IP"
 		puts "-"*95
@@ -425,19 +442,18 @@ if $0 !~ /spec$/
 	# Usage for the main command object
 	puts "Usage: ec2 [command]"
 	puts "	Commands:"
-	puts "	  - list 	--> List instances"
-	puts "	  - name	--> Set a name or get the instance ID for a name"
-	puts "	  - ssh		--> Connect to the instance over ssh"
-	puts "	  - scp		--> Copy a file to or from the instance using scp"
-	puts "	  - http	--> Connect to port 80 on the instance in a web browser"
-	puts "	  - config	--> Edit existing or a create new configuration file"
-	puts "	  - ssh_config	--> List hosts in an ssh_config friendly format"
-	
-	# Usage for plugins
-	$plugins.each do |plugin|
-		usage_method = "#{plugin}_usage"
-		if command.respond_to? usage_method
-			command.send usage_method
-		end
-	end
+	puts "	  - list         --> List instances"
+	puts "	  - name         --> Set a name or get the instance ID for a name"
+	puts "	  - ssh          --> Connect to the instance over ssh"
+	puts "	  - scp          --> Copy a file to or from the instance using scp"
+	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
+	puts "	  - config       --> Edit existing or a create new configuration file"
+	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
+
+  $plugins.each do |plugin|
+    usage_method = "#{plugin.to_s.underscore}_usage"
+    if command.respond_to? usage_method
+      command.send usage_method
+    end
+  end
 end
