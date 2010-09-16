@@ -21,19 +21,19 @@ Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.di
 $all_instances = nil
 
 class String
-  def underscore
-    self.gsub(/::/, '/').
-      gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
-      gsub(/([a-z\d])([A-Z])/,'\1_\2').
-      tr("-", "_").
-      downcase
-  end
+	def underscore
+		self.gsub(/::/, '/').
+			gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
+			gsub(/([a-z\d])([A-Z])/,'\1_\2').
+			tr("-", "_").
+			downcase
+	end
 end
 
 
 class SDB
 
-	def initialize 
+	def initialize
 		# This does not actually stay connected, it's stateless
 		@b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
 		@sdb_domain = @b.domain 'ec2_names'
@@ -60,7 +60,7 @@ class SDB
 	end
 
 	def put_attributes name, attrs
-		values = Amazon::SDB::Multimap.new 
+		values = Amazon::SDB::Multimap.new
 		# Multimap won't take hash as a param to the constructor...
 		attrs.each { |key, value| values[key] = value }
 
@@ -85,32 +85,32 @@ end
 
 class EC2Instances
 
-	def initialize 
-		@sdb = SDB.new 
+	def initialize
+		@sdb = SDB.new
 	end
 
-        def self.ec2_object
-          @ec2 ||= begin
-                     options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
-                     RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
-                   end
-        end
+	def self.ec2_object
+		@ec2 ||= begin
+					 options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
+					 RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
+				 end
+	end
 
 	def ec2
-          self.class.ec2_object
+		self.class.ec2_object
 	end
 
 	def info
-                return @parsed_info if @parsed_info
+		return @parsed_info if @parsed_info
 
-                old = $stderr
-                $stderr = StringIO.new
+		old = $stderr
+		$stderr = StringIO.new
 
-                begin
-                  @raw_info ||= ec2.describe_instances
-                ensure
-                  $stderr = old
-                end
+		begin
+			@raw_info ||= ec2.describe_instances
+		ensure
+			$stderr = old
+		end
 
 		@parsed_info = {}
 		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
@@ -131,7 +131,7 @@ class EC2Instances
 
 	def get_instance arg
 		return info[arg] if info[arg]
-		
+
 		id = id_for_name(arg)
 		info[id]
 	end
@@ -145,11 +145,11 @@ class EC2Instances
 
 	def name_instance name, instance_id
 		attrs = @sdb.get_attributes(instance_id)
-	
+
 		if attrs['aws_instance_id']
 			raise RuntimeError, "Error: Amazon SDB already has the value: #{attrs['instance_id']}"
 		end
-	
+
 		instance = get_instance(instance_id)
 
 		if instance.nil?
@@ -190,7 +190,7 @@ class EC2Instance < Hash
 	def initialize hash
 		self.merge! hash
 	end
-	
+
 	def username
 		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
 	end
@@ -203,23 +203,23 @@ class EC2Instance < Hash
 		$all_instances.ssh_key_real_path ssh_key_name, $config['ssh_key_path']
 	end
 
-	def method_missing(method, *params)	
-		method = method.to_sym	
-		return self[method] if self.keys.collect(&:to_sym).include?(method)	
-		super	
-	end	
-
-end
-      
-class EC2Command
-
-	def initialize 
-		$all_instances = EC2Instances.new 
+	def method_missing(method, *params)
+		method = method.to_sym
+		return self[method] if self.keys.collect(&:to_sym).include?(method)
+		super
 	end
 
-        def ec2
-          EC2Instances.ec2_object
-        end
+end
+
+class EC2Command
+
+	def initialize
+		$all_instances = EC2Instances.new
+	end
+
+	def ec2
+		EC2Instances.ec2_object
+	end
 
 	# Get and set EC2 instance names
 	def name args
@@ -229,23 +229,23 @@ class EC2Command
 				puts $all_instances.id_for_name args[0]
 			rescue SocketError => e
 				raise RuntimeError,"Can't connect to Amazon SDB.  No connectivity? "
-		    rescue RuntimeError => e
+			rescue RuntimeError => e
 				STDERR.puts "Not an instance name."
 			end
 			return
 
 		elsif args.size == 2
 
-			$all_instances = EC2Instances.new 
+			$all_instances = EC2Instances.new
 			$all_instances.name_instance(args[0], args[1])
 			return
 
 		end
-	
-		puts "Usage: ec2 name <human readable name>                --> retrieve a value"
-		puts "       ec2 name <human readable name> <instance ID>  --> set a value"
+
+		puts "Usage: ec2 name <human readable name>				--> retrieve a value"
+		puts "	   ec2 name <human readable name> <instance ID>  --> set a value"
 	end
-	
+
 	# Show all instances, with nice names when available
 	def list not_used
 		info = $all_instances.info
@@ -258,8 +258,8 @@ class EC2Command
 			name = $all_instances.ids_to_names[entry[:aws_instance_id]] ?
 				$all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
 			[
-				sprintf("%-15s", name), 	
-				entry[:aws_image_id], 
+				sprintf("%-15s", name),
+				entry[:aws_image_id],
 				sprintf("%13s", entry[:ssh_key_name]),
 				entry[:aws_instance_type],
 				entry[:aws_launch_time].gsub!(/T.*$/, ''),
@@ -271,7 +271,7 @@ class EC2Command
 
 		puts "-"*95
 	end
-	
+
 	# Connect to a named instance over ssh
 	def ssh args
 		info = $all_instances.get_instance(args.first)
@@ -280,46 +280,55 @@ class EC2Command
 			puts "Instance name not recognized."
 			exit
 		end
-		
+
 		username = 'root'
 		if info[:ssh_key_name] =~ /ubuntu-images/
 			username = 'ubuntu'
 		end
-	
+
 		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
-	
+
 		# Call SSH and pass through all the other ssh options
 		exec "ssh -i #{key} #{username}@#{info[:dns_name]} #{args[1..args.size].join(' ')}"
 	end
-	
+
 	# Copy files to/from remote named instances over SSH
 	def scp args
-		host = args.select { |a| a =~ /\S+:/ }
-	
-		if host.nil?
-			raise RuntimeError, "Can't find host from command string (#{args.join(' ')})."
-		end
-	
-		hostname, file = host.first.split(':')
-	
+		username = 'root'
+
+		host = args.detect { |a| a =~ /\S+:/ }
+		username, host = host.split('@') if host =~ /@/
+
+			if host.nil?
+				raise RuntimeError, "Can't find host from command string (#{args.join(' ')})."
+			end
+
+		hostname, file = host.split(':')
+
 		begin
 			info = $all_instances.get_instance(hostname)
 		rescue Amazon::SDB::RecordNotFoundError => e
 			# Make it a general error so we can capture it upstream
 			raise RuntimeError, e.to_s
 		end
-	
-		username = 'root'
-		if info[:ssh_key_name] =~ /ubuntu-images/
+
+		if (username == "root") && (info[:ssh_key_name] =~ /ubuntu-images/)
 			username = 'ubuntu'
 		end
-	
+
 		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
 		instance_ip = info[:dns_name]
-	
-		filtered_args = args.map { |a| a.sub(hostname, "#{username}@#{instance_ip}") }
-	
+
+		filtered_args = args.map do |a|
+			if a =~ /#{hostname}/
+				"#{username}@#{instance_ip}:#{file}"
+			else
+				a
+			end
+		end
+
 		# Call SCP and filter through all the other options
+		puts "scp -i #{key} #{filtered_args.join(' ')}"
 		exec "scp -i #{key} #{filtered_args.join(' ')}"
 	end
 
@@ -339,18 +348,18 @@ class EC2Command
 		config_path = File.join(ENV['HOME'], ".ec2rc")
 		if !File.exist? config_path
 			File.open(config_path, "w") do |file|
-				text = <<-EOF.gsub(/^\t{4}/, '') 
-				--- 
+				text = <<-EOF.gsub(/^\t{4}/, '')
+				---
 				# Where your SSH keys are on the disk
-				ssh_key_path: 
+				ssh_key_path:
 				# Which browser you wish to use for HTTP
 				web_browser: /Applications/Firefox.app
 				# AWS keys
-				access_key: 
-				secret_access_key: 
+				access_key:
+				secret_access_key:
 				# Custom plugins can be loaded thus:
 				#
-				# custom_commands: 
+				# custom_commands:
 				#   RemoteCommands: ~/.ec2_remote_commands
 
 				EOF
@@ -359,9 +368,9 @@ class EC2Command
 		end
 
 		if ENV.has_key? 'EDITOR'
-			exec "#{ENV['EDITOR']} #{config_path}" 
+			exec "#{ENV['EDITOR']} #{config_path}"
 		else
-			exec "vim #{config_path}" 
+			exec "vim #{config_path}"
 		end
 	end
 
@@ -394,8 +403,8 @@ if File.exist? File.join(ENV['HOME'], '.ec2rc')
 else
 
 	if $ARGV[0] != 'config'
-	    STDERR.print "Can't open your .ec2rc file.  "
-		STDERR.puts "Consider running 'ec2 config' to create it." 
+		STDERR.print "Can't open your .ec2rc file.  "
+		STDERR.puts "Consider running 'ec2 config' to create it."
 	end
 
 	$config = {}
@@ -422,7 +431,7 @@ if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
 end
 
 if $0 !~ /spec$/
-	
+
 	# Command names
 	begin
 		if ARGV.size > 0
@@ -435,25 +444,25 @@ if $0 !~ /spec$/
 		end
 	rescue RuntimeError => e
 		# Generally we don't want the stack trace for our errors
-	  STDERR.puts e.to_s
-	  exit 1
+		STDERR.puts e.to_s
+		exit 1
 	end
-	
-	# Usage for the main command object
-	puts "Usage: ec2 [command]"
-	puts "	Commands:"
-	puts "	  - list         --> List instances"
-	puts "	  - name         --> Set a name or get the instance ID for a name"
-	puts "	  - ssh          --> Connect to the instance over ssh"
-	puts "	  - scp          --> Copy a file to or from the instance using scp"
-	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
-	puts "	  - config       --> Edit existing or a create new configuration file"
-	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
 
-  $plugins.each do |plugin|
-    usage_method = "#{plugin.to_s.underscore}_usage"
-    if command.respond_to? usage_method
-      command.send usage_method
-    end
-  end
+# Usage for the main command object
+puts "Usage: ec2 [command]"
+puts "	Commands:"
+puts "	  - list		 --> List instances"
+puts "	  - name		 --> Set a name or get the instance ID for a name"
+puts "	  - ssh		  --> Connect to the instance over ssh"
+puts "	  - scp		  --> Copy a file to or from the instance using scp"
+puts "	  - http		 --> Connect to port 80 on the instance in a web browser"
+puts "	  - config	   --> Edit existing or a create new configuration file"
+puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
+
+$plugins.each do |plugin|
+	usage_method = "#{plugin.to_s.underscore}_usage"
+	if command.respond_to? usage_method
+		command.send usage_method
+	end
+end
 end
