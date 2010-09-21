@@ -402,6 +402,7 @@ class EC2Command
 		puts strings.join("\n\n")
 	end
 
+	# Flush the instance cache
 	def flush args
 		$all_instances.flush
 		puts "Cache flushed."
