@@ -21,13 +21,13 @@ Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.di
 $all_instances = nil
 
 class String
-  def underscore
-    self.gsub(/::/, '/').
-      gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
-      gsub(/([a-z\d])([A-Z])/,'\1_\2').
-      tr("-", "_").
-      downcase
-  end
+	def underscore
+		self.gsub(/::/, '/').
+			gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
+			gsub(/([a-z\d])([A-Z])/,'\1_\2').
+			tr("-", "_").
+			downcase
+	end
 end
 
 
@@ -89,28 +89,28 @@ class EC2Instances
 		@sdb = SDB.new 
 	end
 
-        def self.ec2_object
-          @ec2 ||= begin
-                     options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
-                     RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
-                   end
-        end
+	def self.ec2_object
+	  @ec2 ||= begin
+				 options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
+				 RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
+		end
+	end
 
 	def ec2
-          self.class.ec2_object
+    	self.class.ec2_object
 	end
 
 	def info
-                return @parsed_info if @parsed_info
+		return @parsed_info if @parsed_info
 
-                old = $stderr
-                $stderr = StringIO.new
+		old = $stderr
+		$stderr = StringIO.new
 
-                begin
-                  @raw_info ||= ec2.describe_instances
-                ensure
-                  $stderr = old
-                end
+		begin
+			@raw_info ||= ec2.describe_instances
+		ensure
+			$stderr = old
+		end
 
 		@parsed_info = {}
 		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
@@ -163,9 +163,9 @@ class EC2Instances
 		# Parse the hostname rather than doing a (slow) DNS lookup
 		fields = hostname.split "-"
 		if fields.size > 0
-		  return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
+			return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
 		else
-		  return ""
+			return ""
 		end
 	end
 
@@ -217,9 +217,9 @@ class EC2Command
 		$all_instances = EC2Instances.new 
 	end
 
-        def ec2
-          EC2Instances.ec2_object
-        end
+	def ec2
+		EC2Instances.ec2_object
+	end
 
 	# Get and set EC2 instance names
 	def name args
@@ -229,7 +229,7 @@ class EC2Command
 				puts $all_instances.id_for_name args[0]
 			rescue SocketError => e
 				raise RuntimeError,"Can't connect to Amazon SDB.  No connectivity? "
-		    rescue RuntimeError => e
+			rescue RuntimeError => e
 				STDERR.puts "Not an instance name."
 			end
 			return
@@ -394,7 +394,7 @@ if File.exist? File.join(ENV['HOME'], '.ec2rc')
 else
 
 	if $ARGV[0] != 'config'
-	    STDERR.print "Can't open your .ec2rc file.  "
+		STDERR.print "Can't open your .ec2rc file.  "
 		STDERR.puts "Consider running 'ec2 config' to create it." 
 	end
 
@@ -435,8 +435,8 @@ if $0 !~ /spec$/
 		end
 	rescue RuntimeError => e
 		# Generally we don't want the stack trace for our errors
-	  STDERR.puts e.to_s
-	  exit 1
+		STDERR.puts e.to_s
+		exit 1
 	end
 	
 	# Usage for the main command object
@@ -450,10 +450,10 @@ if $0 !~ /spec$/
 	puts "	  - config       --> Edit existing or a create new configuration file"
 	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
 
-  $plugins.each do |plugin|
-    usage_method = "#{plugin.to_s.underscore}_usage"
-    if command.respond_to? usage_method
-      command.send usage_method
-    end
+	$plugins.each do |plugin|
+		usage_method = "#{plugin.to_s.underscore}_usage"
+		if command.respond_to? usage_method
+			command.send usage_method
+		end
   end
 end
