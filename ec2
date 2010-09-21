@@ -18,6 +18,31 @@ Rightscale::HttpConnection.params[:ca_file] = File.join(File.expand_path(File.di
 
 $all_instances = nil
 
+module Cacheable
+
+	def cached_fields *args
+		@@cached_fields = []
+		args.each { |arg| @@cached_fields << "@#{arg.to_s}" }
+	end
+
+	def load_cache
+		if File.exist? cache_file
+			if File.new(cache_file).mtime.to_i > (Time.now.to_i - (60 * 60)) # 1 hour cache time
+				cached_values = File.open(cache_file) { |yf| YAML::load(yf) }
+				return if !cached_values
+				@@cached_fields.each { |field| self.instance_variable_set(field, cached_values[field]) if cached_values[field] }
+			end
+		end
+	end
+
+	def cache
+		cached_values = {}
+		@@cached_fields.each { |field| cached_values[field] = self.instance_variable_get field }
+		File.open(cache_file, 'w') { |file| file.write(YAML.dump(cached_values)) }
+	end
+
+end
+
 class SDB
 
 	def initialize
@@ -71,18 +96,14 @@ class SDB
 end
 
 class EC2Instances
+	extend Cacheable
+	include Cacheable
+
+	cached_fields :parsed_info, :id_name_map
 
 	def initialize
 		@sdb = SDB.new
-		@cached_fields = [ "@parsed_info", "@id_name_map" ]
-
-		if File.exist? cache_file
-			if File.new(cache_file).mtime.to_i > (Time.now.to_i - (60 * 60)) # 1 hour cache time
-				cached_values = File.open(cache_file) { |yf| YAML::load(yf) }
-				return if !cached_values
-				@cached_fields.each { |field| self.instance_variable_set(field, cached_values[field]) if cached_values[field] }
-			end
-		end
+		load_cache
 	end
 
 	def cache_file 
@@ -118,12 +139,6 @@ class EC2Instances
 		return @parsed_info
 	end
 
-	def cache
-		cached_values = {}
-		@cached_fields.each { |field| cached_values[field] = self.instance_variable_get field }
-		cache_file = File.join(ENV['HOME'], ".ec2cache")
-		File.open(cache_file, 'w') { |file| file.write(YAML.dump(cached_values)) }
-	end
 
 	def ids_to_names
 		return @id_name_map if @id_name_map
@@ -182,7 +197,7 @@ class EC2Instances
 	def flush
 		require 'fileutils'
 		# Clear cache for this process...
-		@cached_fields.each { |field| self.instance_variable_set field, nil }
+		@@cached_fields.each { |field| self.instance_variable_set field, nil }
 
 		# Clear it for future processes...
 		FileUtils.rm cache_file
