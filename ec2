@@ -30,7 +30,7 @@ end
 
 class SDB
 
-	def initialize 
+	def initialize
 		# This does not actually stay connected, it's stateless
 		@b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
 		@sdb_domain = @b.domain 'ec2_names'
@@ -57,7 +57,7 @@ class SDB
 	end
 
 	def put_attributes name, attrs
-		values = Amazon::SDB::Multimap.new 
+		values = Amazon::SDB::Multimap.new
 		# Multimap won't take hash as a param to the constructor...
 		attrs.each { |key, value| values[key] = value }
 
@@ -82,19 +82,19 @@ end
 
 class EC2Instances
 
-	def initialize 
-		@sdb = SDB.new 
-	end
-
-	def self.ec2_object
-	  @ec2 ||= begin
-				 options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
-				 RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
-		end
+	def initialize
+		@sdb = SDB.new
 	end
 
 	def ec2
-    	self.class.ec2_object
+		return @ec2_object if @ec2_object
+
+		@ec2_object = begin
+			options = { :cache => true, :logger => Logger.new(File.open("/dev/null", "w")) }
+			RightAws::Ec2.new($config['access_key'], $config['secret_access_key'], options) || raise(SocketError, "Unable to connect to EC2 API.")
+		end
+
+		return @ec2_object
 	end
 
 	def info
@@ -128,7 +128,7 @@ class EC2Instances
 
 	def get_instance arg
 		return info[arg] if info[arg]
-		
+
 		id = id_for_name(arg)
 		info[id]
 	end
@@ -142,11 +142,11 @@ class EC2Instances
 
 	def name_instance name, instance_id
 		attrs = @sdb.get_attributes(instance_id)
-	
+
 		if attrs['aws_instance_id']
 			raise RuntimeError, "Error: Amazon SDB already has the value: #{attrs['instance_id']}"
 		end
-	
+
 		instance = get_instance(instance_id)
 
 		if instance.nil?
@@ -160,7 +160,7 @@ class EC2Instances
 		# Parse the hostname rather than doing a (slow) DNS lookup
 		fields = hostname.split "-"
 		if fields.size > 0
-			return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{fields[4].gsub(/\..*/,'')}"
+			return "#{fields[1]}.#{fields[2]}.#{fields[3]}.#{(fields[4]||'').gsub(/\..*/,'')}"
 		else
 			return ""
 		end
@@ -172,12 +172,13 @@ class EC2Instance < Hash
 	def initialize hash
 		self.merge! hash
 	end
-	
+
 	def username
+		# TODO: this should be settable in SDB rather than trying to figure it out here
 		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
 	end
 
-	def friendly_name
+	def name
 		$all_instances.ids_to_names[aws_instance_id] || aws_instance_id
 	end
 
@@ -195,22 +196,45 @@ class EC2Instance < Hash
 		return key
 	end
 
-	def method_missing(method, *params)	
-		method = method.to_sym	
-		return self[method] if self.keys.collect(&:to_sym).include?(method)	
-		super	
-	end	
+	def ssh args
+		# Call SSH and pass through all the other ssh options
+		exec "ssh -i #{self.key} #{self.username}@#{self.dns_name} #{args[1..args.size].join(' ')}"
+	end
 
+	def scp args
+		host = args.detect { |a| a =~ /\S+:/ }
+		junk, file = host.split(':')
+
+		username = self.username
+		username, junk = host.split('@') if host =~ /@/
+
+		filtered_args = args.map do |arg|
+			if arg =~ /#{self.name}/
+				"#{username}@#{self.dns_name}:#{file}"
+			else
+				arg
+			end
+		end
+
+		# Call SCP and filter through all the other options
+		exec "scp -i #{self.key} #{filtered_args.join(' ')}"
+	end
+
+	def method_missing(method, *params)
+		method = method.to_sym
+		return self[method] if self.keys.collect(&:to_sym).include?(method)
+		super
+	end
 end
-      
+
 class EC2Command
 
-	def initialize 
-		$all_instances = EC2Instances.new 
+	def initialize
+		$all_instances = EC2Instances.new
 	end
 
 	def ec2
-		EC2Instances.ec2_object
+		EC2Instances.ec2
 	end
 
 	# Get and set EC2 instance names
@@ -228,16 +252,16 @@ class EC2Command
 
 		elsif args.size == 2
 
-			$all_instances = EC2Instances.new 
+			$all_instances = EC2Instances.new
 			$all_instances.name_instance(args[0], args[1])
 			return
 
 		end
-	
-		puts "Usage: ec2 name <human readable name>                --> retrieve a value"
-		puts "       ec2 name <human readable name> <instance ID>  --> set a value"
+
+		puts "Usage: ec2 name <human readable name>				--> retrieve a value"
+		puts "	   ec2 name <human readable name> <instance ID>  --> set a value"
 	end
-	
+
 	# Show all instances, with nice names when available
 	def list not_used
 		info = $all_instances.info
@@ -250,8 +274,8 @@ class EC2Command
 			name = $all_instances.ids_to_names[entry[:aws_instance_id]] ?
 				$all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
 			[
-				sprintf("%-15s", name), 	
-				entry[:aws_image_id], 
+				sprintf("%-15s", name),
+				entry[:aws_image_id],
 				sprintf("%13s", entry[:ssh_key_name]),
 				entry[:aws_instance_type],
 				entry[:aws_launch_time].gsub!(/T.*$/, ''),
@@ -263,41 +287,30 @@ class EC2Command
 
 		puts "-"*95
 	end
-	
+
 	# Connect to a named instance over ssh
 	def ssh args
 		instance = $all_instances.get_instance(args.first)
 
 		if !instance
-			puts "Instance name not recognized."
-			exit
-		end
-		
-		# Call SSH and pass through all the other ssh options
-		exec "ssh -i #{instance.key} #{instance.username}@#{instance.dns_name} #{args[1..args.size].join(' ')}"
-	end
-	
-	# Copy files to/from remote named instances over SSH
-	def scp args
-		host = args.select { |a| a =~ /\S+:/ }
-	
-		if host.nil?
 			raise RuntimeError, "Can't find host from command string (#{args.join(' ')})."
 		end
-	
-		hostname, file = host.first.split(':')
-	
-		begin
-			instance = $all_instances.get_instance(hostname)
-		rescue Amazon::SDB::RecordNotFoundError => e
-			# Make it a general error so we can capture it upstream
-			raise RuntimeError, e.to_s
+
+		instance.ssh args
+	end
+
+	# Copy files to/from remote named instances over SSH
+	def scp args
+		host = args.detect { |a| a =~ /\S+:/ }
+		hostname, junk = host.split(':')
+		hostname = hostname.sub(/.*@/, '')
+
+		instance = $all_instances.get_instance(hostname)
+		if !instance
+			raise RuntimeError, "Can't find host from command string (#{args.join(' ')})."
 		end
-	
-		filtered_args = args.map { |a| a.sub(hostname, "#{instance.username}@#{instance.dns_name}") }
-	
-		# Call SCP and filter through all the other options
-		exec "scp -i #{instance.key} #{filtered_args.join(' ')}"
+
+		instance.scp args
 	end
 
 	# OSX-specific: open browser to instance, using HTTP on port 80
@@ -316,18 +329,18 @@ class EC2Command
 		config_path = File.join(ENV['HOME'], ".ec2rc")
 		if !File.exist? config_path
 			File.open(config_path, "w") do |file|
-				text = <<-EOF.gsub(/^\t{4}/, '') 
-				--- 
+				text = <<-EOF.gsub(/^\t{4}/, '')
+				---
 				# Where your SSH keys are on the disk
-				ssh_key_path: 
+				ssh_key_path:
 				# Which browser you wish to use for HTTP
 				web_browser: /Applications/Firefox.app
 				# AWS keys
-				access_key: 
-				secret_access_key: 
+				access_key:
+				secret_access_key:
 				# Custom plugins can be loaded thus:
 				#
-				# custom_commands: 
+				# custom_commands:
 				#   RemoteCommands: ~/.ec2_remote_commands
 
 				EOF
@@ -336,9 +349,9 @@ class EC2Command
 		end
 
 		if ENV.has_key? 'EDITOR'
-			exec "#{ENV['EDITOR']} #{config_path}" 
+			exec "#{ENV['EDITOR']} #{config_path}"
 		else
-			exec "vim #{config_path}" 
+			exec "vim #{config_path}"
 		end
 	end
 
@@ -347,7 +360,7 @@ class EC2Command
 		collection = $all_instances.info
 		strings = collection.keys.map do |instance_name|
 			instance = EC2Instance.new(collection[instance_name])
-			"Host #{instance.friendly_name}\n	IdentityFile #{instance.key}\n	HostName #{instance.dns_name}\n	User #{instance.username}"
+			"Host #{instance.name}\n	IdentityFile #{instance.key}\n	HostName #{instance.dns_name}\n	User #{instance.username}"
 		end
 		puts strings.join("\n\n")
 	end
@@ -372,7 +385,7 @@ else
 
 	if $ARGV[0] != 'config'
 		STDERR.print "Can't open your .ec2rc file.  "
-		STDERR.puts "Consider running 'ec2 config' to create it." 
+		STDERR.puts "Consider running 'ec2 config' to create it."
 	end
 
 	$config = {}
@@ -399,7 +412,7 @@ if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
 end
 
 if $0 !~ /spec$/
-	
+
 	# Command names
 	begin
 		if ARGV.size > 0
