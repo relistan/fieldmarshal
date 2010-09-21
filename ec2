@@ -84,6 +84,19 @@ class EC2Instances
 
 	def initialize
 		@sdb = SDB.new
+		@cached_fields = [ "@parsed_info", "@id_name_map" ]
+
+		if File.exist? cache_file
+			if File.new(cache_file).mtime.to_i > (Time.now.to_i - (60 * 60)) # 1 hour cache time
+				cached_values = File.open(cache_file) { |yf| YAML::load(yf) }
+				return if !cached_values
+				@cached_fields.each { |field| self.instance_variable_set(field, cached_values[field]) if cached_values[field] }
+			end
+		end
+	end
+
+	def cache_file 
+		File.join(ENV['HOME'], ".ec2cache")
 	end
 
 	def ec2
@@ -99,7 +112,6 @@ class EC2Instances
 
 	def info
 		return @parsed_info if @parsed_info
-
 		old = $stderr
 		$stderr = StringIO.new
 
@@ -112,7 +124,15 @@ class EC2Instances
 		@parsed_info = {}
 		@raw_info.each { |entry| @parsed_info[entry[:aws_instance_id]] = EC2Instance.new entry }
 
+		cache
 		return @parsed_info
+	end
+
+	def cache
+		cached_values = {}
+		@cached_fields.each { |field| cached_values[field] = self.instance_variable_get field }
+		cache_file = File.join(ENV['HOME'], ".ec2cache")
+		File.open(cache_file, 'w') { |file| file.write(YAML.dump(cached_values)) }
 	end
 
 	def ids_to_names
@@ -123,6 +143,8 @@ class EC2Instances
 		keys.each do |k|
 			@id_name_map[id_for_name k.key] = k.key
 		end
+
+		cache
 		return @id_name_map
 	end
 
@@ -154,6 +176,7 @@ class EC2Instances
 		end
 
 		@sdb.put_attributes(name, instance)
+		@raw_info = nil
 	end
 
 	def hostname_to_ip hostname
@@ -164,6 +187,15 @@ class EC2Instances
 		else
 			return ""
 		end
+	end
+
+	def flush
+		require 'fileutils'
+		# Clear cache for this process...
+		@cached_fields.each { |field| self.instance_variable_set field, nil }
+
+		# Clear it for future processes...
+		FileUtils.rm cache_file
 	end
 end
 
@@ -230,7 +262,7 @@ end
 class EC2Command
 
 	def initialize
-		$all_instances = EC2Instances.new
+		$all_instances ||= EC2Instances.new
 	end
 
 	def ec2
@@ -364,6 +396,11 @@ class EC2Command
 		end
 		puts strings.join("\n\n")
 	end
+
+	def flush args
+		$all_instances.flush
+		puts "Cache flushed."
+	end
 end
 
 
@@ -432,12 +469,13 @@ if $0 !~ /spec$/
 	# Usage for the main command object
 	puts "Usage: ec2 [command]"
 	puts "	Commands:"
+	puts "	  - config       --> Edit existing or a create new configuration file"
+	puts "	  - flush        --> Flush the Field Marshal instance cache manually"
+	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
 	puts "	  - list         --> List instances"
 	puts "	  - name         --> Set a name or get the instance ID for a name"
-	puts "	  - ssh          --> Connect to the instance over ssh"
 	puts "	  - scp          --> Copy a file to or from the instance using scp"
-	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
-	puts "	  - config       --> Edit existing or a create new configuration file"
+	puts "	  - ssh          --> Connect to the instance over ssh"
 	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
 
 	$plugins.each do |plugin|
