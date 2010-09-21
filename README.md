@@ -27,9 +27,11 @@ Simply running 'ec2' will list the options available.  E.g.
 
 Usage: ec2 [command]
 	Commands:
-	  - list 	--> List instances
-	  - name	--> Set a name or get the instance ID for a name
-	  - ssh		--> Connect to the instance over ssh
-	  - scp		--> Copy a file to or from the instance using scp
-	  - http	--> Connect to port 80 on the instance in a web browser
-	  - config	--> Edit existing or a create new configuration file
+	  - config       --> Edit existing or a create new configuration file
+	  - flush        --> Flush the Field Marshal instance cache manually
+	  - http         --> Connect to port 80 on the instance in a web browser
+	  - list         --> List instances
+	  - name         --> Set a name or get the instance ID for a name
+	  - scp          --> Copy a file to or from the instance using scp
+	  - ssh          --> Connect to the instance over ssh
+	  - ssh_config   --> List hosts in an ssh_config friendly format
