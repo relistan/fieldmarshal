@@ -8,8 +8,6 @@
 # Many values are read from the YAML config ~/.ec2rc.  Run 'ec2 config' to
 # create it for the first time.
 
-# Help bundler find the gemfile, which is in the same path as the executable.
-# Doesn't work with symlinked executable...
 require 'rubygems'
 require 'amazon_sdb'
 require 'right_aws'
@@ -29,7 +27,6 @@ class String
 			downcase
 	end
 end
-
 
 class SDB
 
@@ -168,21 +165,6 @@ class EC2Instances
 			return ""
 		end
 	end
-
-	def ssh_key_real_path key, path
-		# Oh, the horror
-		path = File.expand_path path
-		if File.exist?(File.join(path, key))
-			key = File.join(path, key)
-		elsif File.exist?(File.join(path, "#{key}.pem"))
-			key = File.join(path, "#{key}.pem")
-		elsif File.exist?(File.join(path, "#{key}-key"))
-			key = File.join(path, "#{key}-key")
-		end
-
-		return key
-	end
-
 end
 
 class EC2Instance < Hash
@@ -200,7 +182,17 @@ class EC2Instance < Hash
 	end
 
 	def key
-		$all_instances.ssh_key_real_path ssh_key_name, $config['ssh_key_path']
+		path = File.expand_path $config['ssh_key_path']
+
+		if File.exist?(File.join(path, ssh_key_name))
+			key = File.join(path, ssh_key_name)
+		elsif File.exist?(File.join(path, "#{ssh_key_name}.pem"))
+			key = File.join(path, "#{ssh_key_name}.pem")
+		elsif File.exist?(File.join(path, "#{ssh_key_name}-key"))
+			key = File.join(path, "#{ssh_key_name}-key")
+		end
+
+		return key
 	end
 
 	def method_missing(method, *params)	
@@ -274,22 +266,15 @@ class EC2Command
 	
 	# Connect to a named instance over ssh
 	def ssh args
-		info = $all_instances.get_instance(args.first)
+		instance = $all_instances.get_instance(args.first)
 
-		if !info
+		if !instance
 			puts "Instance name not recognized."
 			exit
 		end
 		
-		username = 'root'
-		if info[:ssh_key_name] =~ /ubuntu-images/
-			username = 'ubuntu'
-		end
-	
-		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
-	
 		# Call SSH and pass through all the other ssh options
-		exec "ssh -i #{key} #{username}@#{info[:dns_name]} #{args[1..args.size].join(' ')}"
+		exec "ssh -i #{instance.key} #{instance.username}@#{instance.dns_name} #{args[1..args.size].join(' ')}"
 	end
 	
 	# Copy files to/from remote named instances over SSH
@@ -303,35 +288,27 @@ class EC2Command
 		hostname, file = host.first.split(':')
 	
 		begin
-			info = $all_instances.get_instance(hostname)
+			instance = $all_instances.get_instance(hostname)
 		rescue Amazon::SDB::RecordNotFoundError => e
 			# Make it a general error so we can capture it upstream
 			raise RuntimeError, e.to_s
 		end
 	
-		username = 'root'
-		if info[:ssh_key_name] =~ /ubuntu-images/
-			username = 'ubuntu'
-		end
-	
-		key = $all_instances.ssh_key_real_path info[:ssh_key_name], $config['ssh_key_path']
-		instance_ip = info[:dns_name]
-	
-		filtered_args = args.map { |a| a.sub(hostname, "#{username}@#{instance_ip}") }
+		filtered_args = args.map { |a| a.sub(hostname, "#{instance.username}@#{instance.dns_name}") }
 	
 		# Call SCP and filter through all the other options
-		exec "scp -i #{key} #{filtered_args.join(' ')}"
+		exec "scp -i #{instance.key} #{filtered_args.join(' ')}"
 	end
 
 	# OSX-specific: open browser to instance, using HTTP on port 80
 	def http args
-		info = $all_instances.get_instance(args.first)
+		instance = $all_instances.get_instance(args.first)
 
-		if info.nil?
+		if instance.nil?
 			raise RuntimeError, "Can't find host from command string"
 		end
 
-		exec "open -a #{$config['web_browser']} http://#{info[:dns_name]}/"
+		exec "open -a #{$config['web_browser']} http://#{instance.dns_name}/"
 	end
 
 	# Edit the config file (or create if none)
