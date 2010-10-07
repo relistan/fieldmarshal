@@ -183,6 +183,7 @@ class EC2Instances
 		end
 
 		instance = get_instance(instance_id)
+		instance[:user_id] = [ ENV['USER'], ENV['USERNAME'], `whoami` ].reject { |s| s && s.size < 1 }.first
 
 		if instance.nil?
 			raise RuntimeError, "Can't find information about #{instance_id}"
@@ -210,14 +211,14 @@ class EC2Instances
 		if instances.nil?
 			raise RuntimeError, "AWS API returned no instance information on create"
 		end
-		instance_id = instances.first.id
+		instance_id = instances.first[:aws_instance_id]
 		flush
 		name_instance name, instance_id
 	end
 
 	def shutdown name
 		instance = $all_instances.get_instance name
-		ec2.terminate_instances [instance.id]
+		ec2.terminate_instances [instance.aws_id]
 		flush
 	end
 end
@@ -233,7 +234,7 @@ class EC2Instance < Hash
 		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
 	end
 
-	def id
+	def aws_id
 		self[:aws_instance_id]
 	end
 
