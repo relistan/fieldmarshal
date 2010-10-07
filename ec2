@@ -27,7 +27,7 @@ module Cacheable
 
 	def load_cache
 		if File.exist? cache_file
-			if File.new(cache_file).mtime.to_i > (Time.now.to_i - (60 * 60)) # 1 hour cache time
+			if File.new(cache_file).mtime.to_i > (Time.now.to_i - (60 * 60 * 8)) # 8 hour cache time
 				cached_values = File.open(cache_file) { |yf| YAML::load(yf) }
 				return if !cached_values
 				@@cached_fields.each { |field| self.instance_variable_set(field, cached_values[field]) if cached_values[field] }
@@ -41,6 +41,14 @@ module Cacheable
 		File.open(cache_file, 'w') { |file| file.write(YAML.dump(cached_values)) }
 	end
 
+	def flush
+		require 'fileutils'
+		# Clear cache for this process...
+		@@cached_fields.each { |field| self.instance_variable_set field, nil }
+
+		# Clear it for future processes...
+		FileUtils.rm cache_file
+	end
 end
 
 class SDB
@@ -194,13 +202,23 @@ class EC2Instances
 		end
 	end
 
-	def flush
-		require 'fileutils'
-		# Clear cache for this process...
-		@@cached_fields.each { |field| self.instance_variable_set field, nil }
+	def create name, defaults
+		instances = ec2.run_instances(defaults['ami'], 1, 1, 
+			defaults['access_groups'], defaults['key'],
+			'', 'public', nil, nil, nil, defaults['zone'])
+		require 'pp'
+		if instances.nil?
+			raise RuntimeError, "AWS API returned no instance information on create"
+		end
+		instance_id = instances.first.id
+		flush
+		name_instance name, instance_id
+	end
 
-		# Clear it for future processes...
-		FileUtils.rm cache_file
+	def shutdown name
+		instance = $all_instances.get_instance name
+		ec2.terminate_instances [instance.id]
+		flush
 	end
 end
 
@@ -213,6 +231,10 @@ class EC2Instance < Hash
 	def username
 		# TODO: this should be settable in SDB rather than trying to figure it out here
 		self.ssh_key_name =~ /ubuntu-images/ ? 'ubuntu' : 'root'
+	end
+
+	def id
+		self[:aws_instance_id]
 	end
 
 	def name
@@ -255,6 +277,10 @@ class EC2Instance < Hash
 
 		# Call SCP and filter through all the other options
 		exec "scp -i #{self.key} #{filtered_args.join(' ')}"
+	end
+
+	def running?
+		self[:aws_state] == "running"	
 	end
 
 	def method_missing(method, *params)
@@ -305,13 +331,12 @@ class EC2Command
 		puts "-"*95
 		puts "Instance	AMI		Key		Size		Date		Public IP"
 		puts "-"*95
-
 		all = info.keys.map do |key|
 			entry = info[key]
 			name = $all_instances.ids_to_names[entry[:aws_instance_id]] ?
 				$all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
 			[
-				sprintf("%-15s", name),
+				sprintf("%-15s", entry.running? ? name : "*#{name}"),
 				entry[:aws_image_id],
 				sprintf("%13s", entry[:ssh_key_name]),
 				entry[:aws_instance_type],
@@ -379,7 +404,16 @@ class EC2Command
 				#
 				# custom_commands:
 				#   RemoteCommands: ~/.ec2_remote_commands
-
+				# New Instance defaults when using the 'create' command
+				new_instance_defaults: 
+				  zone: us-east-1c
+				  access_groups: 
+				  - web-ssh
+				  - default
+				  ami: ami-bb709dd2
+				  key: skeleton
+				# The default user to use in ssh if not specified
+				default_user: ubuntu
 				EOF
 				file.write text
 			end
@@ -406,6 +440,66 @@ class EC2Command
 	def flush args
 		$all_instances.flush
 		puts "Cache flushed."
+	end
+
+	# Create a new EC2 instance
+	def create args
+		# The first arg is the instance name, other args are field values from the 
+		# config in the form "--key=my_aws_key_name"
+		if args.empty?
+			raise RuntimeError, "Must specify an instance name."
+		end
+
+		name = args[0]
+		args = args[1..-1]
+		defaults = $config['new_instance_defaults']
+		args.each do |arg|
+			key, value = arg.sub(/--/, '').split("=")
+			defaults[key] = value
+		end
+
+		$all_instances.create(args[0], defaults)
+		puts "Created #{args[0]}."
+	end
+
+	# Clone an existing EC2 instance (just the settings)
+	def clone args
+		if args.size < 2
+			raise RuntimeError, "Must specify an exsting instance name and a name for the new instance."
+		end
+
+		existing_name = args[0]
+		new_instance_name = args[1]
+		instance = $all_instances.get_instance existing_name
+		if instance.nil?
+			puts "Error, bad instance returned."
+			exit 1
+		end
+		settings = {
+			"zone" => instance[:aws_availability_zone],
+			"access_groups" => instance[:aws_groups],
+			"ami" => instance[:aws_image_id],
+			"key" => instance[:ssh_key_name]
+		}
+		$all_instances.create(new_instance_name, settings)
+		puts "Created #{new_instance_name} as a clone of #{existing_name}."
+	end
+
+	# Shut down an instance by name
+	def shutdown args
+		if args.empty?
+			puts "You must specify an instance name"
+			exit 1
+		end
+
+		puts "WARNING! This will permanently destroy '#{args[0]}'."
+		print "Proceed anyway? (y/n): "
+		if $stdin.gets[0,1].downcase == "y"
+			$all_instances.shutdown args[0]
+			puts "\nShutting down #{args[0]}."
+		else
+			puts "\nPhew... that was close. You canceled the order."
+		end
 	end
 end
 
@@ -484,7 +578,9 @@ if $0 !~ /spec$/
 	# Usage for the main command object
 	puts "Usage: ec2 [command]"
 	puts "	Commands:"
+	puts "	  - clone        --> Start a new instance with the same settings as the named instance"
 	puts "	  - config       --> Edit existing or a create new configuration file"
+	puts "	  - create       --> Create a new instance with the first arg as the name"
 	puts "	  - flush        --> Flush the Field Marshal instance cache manually"
 	puts "	  - http         --> Connect to port 80 on the instance in a web browser"
 	puts "	  - list         --> List instances"
@@ -492,6 +588,7 @@ if $0 !~ /spec$/
 	puts "	  - scp          --> Copy a file to or from the instance using scp"
 	puts "	  - ssh          --> Connect to the instance over ssh"
 	puts "	  - ssh_config   --> List hosts in an ssh_config friendly format"
+	puts "	  - shutdown     --> Terminate an EC2 instance by name"
 
 	$plugins.each do |plugin|
 		usage_method = "#{underscore(plugin.to_s)}_usage"
