@@ -1,0 +1,89 @@
+--- 
+i-27f2294c: !map:EC2Instance 
+  ami_launch_index: "0"
+  dns_name: ec2-174-129-202-215.compute-1.amazonaws.com
+  aws_instance_id: i-27f2294c
+  aws_image_id: ami-bb777ff2
+  aws_state_code: "16"
+  aws_reason: ""
+  aws_instance_type: t1.micro
+  aws_state: running
+  aws_kernel_id: aki-5f15f636
+  aws_launch_time: "2010-03-10T22:23:15.000Z"
+  aws_owner: "12341234"
+  aws_ramdisk_id: ari-d5709dbc
+  aws_availability_zone: us-east-1a
+  aws_reservation_id: r-000000
+  ssh_key_name: ubuntu-images
+  private_dns_name: domU-12-31-39-09-98-A1.compute-1.internal
+  aws_product_codes: []
+
+  aws_groups: 
+  - web-ssh
+  - default
+i-a10d81ca: !map:EC2Instance 
+  ami_launch_index: "0"
+  dns_name: ec2-14-43-96-210.compute-1.amazonaws.com
+  aws_instance_id: i-a10d81ca
+  aws_image_id: ami-bb777ff2
+  aws_state_code: "272"
+  aws_reason: ""
+  aws_instance_type: t1.micro
+  aws_state: running
+  aws_kernel_id: aki-5f15f636
+  aws_launch_time: "2010-04-01T20:51:50.000Z"
+  aws_owner: "12341234"
+  aws_ramdisk_id: ari-d5709dbc
+  aws_availability_zone: us-east-1a
+  aws_reservation_id: r-000000
+  ssh_key_name: ubuntu-images
+  private_dns_name: domU-12-31-39-0F-21-83.compute-1.internal
+  aws_product_codes: []
+
+  aws_groups: 
+  - web-ssh
+  - default
+i-f1f3289a: !map:EC2Instance 
+  ami_launch_index: "0"
+  dns_name: ec2-184-73-25-114.compute-1.amazonaws.com
+  aws_instance_id: i-f1f3289a
+  aws_image_id: ami-bb777ff2
+  aws_state_code: "16"
+  aws_reason: ""
+  aws_instance_type: t1.micro
+  aws_state: running
+  aws_kernel_id: aki-5f15f636
+  aws_launch_time: "2010-03-10T22:21:31.000Z"
+  aws_owner: "12341234"
+  aws_ramdisk_id: ari-d5709dbc
+  aws_availability_zone: us-east-1a
+  aws_reservation_id: r-000000
+  ssh_key_name: ubuntu-images
+  private_dns_name: domU-12-31-39-0A-49-31.compute-1.internal
+  aws_product_codes: []
+
+  aws_groups: 
+  - web-ssh
+  - default
+i-4357cd28: !map:EC2Instance 
+  ami_launch_index: "0"
+  dns_name: ec2-174-129-74-98.compute-1.amazonaws.com
+  aws_instance_id: i-4357cd28
+  aws_image_id: ami-55739e3c
+  aws_state_code: "16"
+  aws_reason: ""
+  aws_instance_type: m1.large
+  aws_state: running
+  aws_kernel_id: aki-fd15f694
+  aws_launch_time: "2010-04-12T17:26:56.000Z"
+  aws_owner: "12341234"
+  aws_ramdisk_id: ari-7b739e12
+  aws_availability_zone: us-east-1a
+  aws_reservation_id: r-000000
+  ssh_key_name: ubuntu-images
+  private_dns_name: domU-12-31-39-09-F5-01.compute-1.internal
+  aws_product_codes: []
+
+  aws_groups: 
+  - web-ssh
+  - default

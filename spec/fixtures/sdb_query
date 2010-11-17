@@ -1,0 +1,27 @@
+--- 
+- !ruby/object:Amazon::SDB::Item 
+  attributes: 
+  domain: &id001 !ruby/object:Amazon::SDB::Domain 
+    base: !ruby/object:Amazon::SDB::Base 
+      access_key: ASDFASDFASDFSDF
+      secret_key: ooooooooooooooooooooovhivzQgbeoFC5tr6dCu
+      usage: !ruby/object:Amazon::SDB::Usage 
+        box_usage: 8.7888e-05
+    name: ec2_names
+  key: sadf
+- !ruby/object:Amazon::SDB::Item 
+  attributes: 
+  domain: *id001
+  key: blog
+- !ruby/object:Amazon::SDB::Item 
+  attributes: 
+  domain: *id001
+  key: foo
+- !ruby/object:Amazon::SDB::Item 
+  attributes: 
+  domain: *id001
+  key: foo2
+- !ruby/object:Amazon::SDB::Item 
+  attributes: 
+  domain: *id001
+  key: foo3

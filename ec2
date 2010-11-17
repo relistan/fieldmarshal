@@ -47,13 +47,15 @@ module Cacheable
 		@@cached_fields.each { |field| self.instance_variable_set field, nil }
 
 		# Clear it for future processes...
-		FileUtils.rm cache_file
+		FileUtils.rm_f cache_file
 	end
 end
 
 class SDB
 
-	def initialize
+	def sdb_domain
+		return @sdb_domain if @sdb_domain
+
 		# This does not actually stay connected, it's stateless
 		@b = Amazon::SDB::Base.new($config['access_key'], $config['secret_access_key'])
 		@sdb_domain = @b.domain 'ec2_names'
@@ -66,12 +68,13 @@ class SDB
 		if @sdb_domain.nil?
 			raise SocketError, "Unable to connect to ec2_names domain on SDB."
 		end
+		@sdb_domain
 	end
 
 	def get_attributes name
 		attrs = {}
 		begin
-			attrs = @sdb_domain.get_attributes(name).attributes.to_h
+			attrs = sdb_domain.get_attributes(name).attributes.to_h
 		rescue Amazon::SDB::RecordNotFoundError
 			# do nothing
 		end
@@ -84,13 +87,13 @@ class SDB
 		# Multimap won't take hash as a param to the constructor...
 		attrs.each { |key, value| values[key] = value }
 
-		@sdb_domain.put_attributes(name, values)
+		sdb_domain.put_attributes(name, values)
 	end
 
 	def delete_attributes name
 		entry = nil
 		begin
-			entry = @sdb_domain.get_attributes name
+			entry = sdb_domain.get_attributes name
 			entry.destroy!
 		rescue Amazon::SDB::RecordNotFoundError
 			# do nothing
@@ -98,7 +101,7 @@ class SDB
 	end
 
 	def get_all
-		@sdb_domain.query
+		sdb_domain.query
 	end
 
 end
@@ -110,8 +113,11 @@ class EC2Instances
 	cached_fields :parsed_info, :id_name_map
 
 	def initialize
-		@sdb = SDB.new
 		load_cache
+	end
+
+	def sdb
+        @sdb ||= SDB.new
 	end
 
 	def cache_file 
@@ -152,7 +158,7 @@ class EC2Instances
 		return @id_name_map if @id_name_map
 
 		@id_name_map = {}
-		keys = @sdb.get_all
+		keys = sdb.get_all
 		keys.each do |k|
 			@id_name_map[id_for_name k.key] = k.key
 		end
@@ -171,12 +177,12 @@ class EC2Instances
 	def id_for_name name
 		return if name.nil?
 
-		attrs = @sdb.get_attributes(name)
+		attrs = sdb.get_attributes(name)
 		return attrs['aws_instance_id']
 	end
 
 	def name_instance name, instance_id
-		attrs = @sdb.get_attributes(instance_id)
+		attrs = sdb.get_attributes(instance_id)
 
 		if attrs['aws_instance_id']
 			raise RuntimeError, "Error: Amazon SDB already has the value: #{attrs['instance_id']}"
@@ -189,7 +195,7 @@ class EC2Instances
 			raise RuntimeError, "Can't find information about #{instance_id}"
 		end
 
-		@sdb.put_attributes(name, instance)
+		sdb.put_attributes(name, instance)
 		@raw_info = nil
 	end
 
@@ -206,8 +212,7 @@ class EC2Instances
 	def create name, defaults
 		instances = ec2.run_instances(defaults['ami'], 1, 1, 
 			defaults['access_groups'], defaults['key'],
-			'', 'public', nil, nil, nil, defaults['zone'])
-		require 'pp'
+			'', 'public', defaults['size'], nil, nil, defaults['zone'])
 		if instances.nil?
 			raise RuntimeError, "AWS API returned no instance information on create"
 		end
@@ -293,10 +298,6 @@ end
 
 class EC2Command
 
-	def initialize
-		$all_instances ||= EC2Instances.new
-	end
-
 	def ec2
 		EC2Instances.ec2
 	end
@@ -316,7 +317,6 @@ class EC2Command
 
 		elsif args.size == 2
 
-			$all_instances = EC2Instances.new
 			$all_instances.name_instance(args[0], args[1])
 			return
 
@@ -408,10 +408,11 @@ class EC2Command
 				# New Instance defaults when using the 'create' command
 				new_instance_defaults: 
 				  zone: us-east-1c
+				  size: t1.micro
 				  access_groups: 
 				  - web-ssh
 				  - default
-				  ami: ami-bb709dd2
+				  ami: ami-6006f309
 				  key: skeleton
 				# The default user to use in ssh if not specified
 				default_user: ubuntu
@@ -517,48 +518,50 @@ end
 # MAIN
 # ------------------------------------------------------------------------------
 
-# We can be called like 'ec2 name ...' or 'ec2-name ...'
-if $0 == 'ec2'
-	ARGV.slice! 0
-elsif $0 =~ /ec2-([a-z]+)$/
-	ARGV.unshift($1)
-end
+if $0 =~ /ec2$/
 
-# Load config hash
-if File.exist? File.join(ENV['HOME'], '.ec2rc')
-	$config = YAML.load_file(File.join(ENV['HOME'], '.ec2rc'))
-else
-
-	if $ARGV[0] != 'config'
-		STDERR.print "Can't open your .ec2rc file.  "
-		STDERR.puts "Consider running 'ec2 config' to create it."
+	# We can be called like 'ec2 name ...' or 'ec2-name ...'
+	if $0 == 'ec2'
+		ARGV.slice! 0
+	elsif $0 =~ /ec2-([a-z]+)$/
+		ARGV.unshift($1)
 	end
-
-	$config = {}
-end
-
-command = EC2Command.new
-$plugins = []
-
-# Load commands plugins described in the config
-if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
-
-	$config['custom_commands'].each do |name, path|
-		full_path = File.expand_path("#{path}.rb")
-
-		if !File.exists? full_path
-			STDERR.puts "Failed adding #{name} command module from #{path}: File not found."
-			next
+	
+	# Load config hash
+	if File.exist? File.join(ENV['HOME'], '.ec2rc')
+		$config = YAML.load_file(File.join(ENV['HOME'], '.ec2rc'))
+	else
+	
+		if $ARGV[0] != 'config'
+			STDERR.print "Can't open your .ec2rc file.  "
+			STDERR.puts "Consider running 'ec2 config' to create it."
 		end
-
-		require full_path
-		command.extend name.constantize
-		$plugins << name
+	
+		$config = {}
 	end
-end
+	
+	command = EC2Command.new
+	$plugins = []
+	
+	# Load commands plugins described in the config
+	if $config.has_key?('custom_commands') && $config['custom_commands'].size > 0
+	
+		$config['custom_commands'].each do |name, path|
+			full_path = File.expand_path("#{path}.rb")
+	
+			if !File.exists? full_path
+				STDERR.puts "Failed adding #{name} command module from #{path}: File not found."
+				next
+			end
+	
+			require full_path
+			command.extend name.constantize
+			$plugins << name
+		end
+	end
+	
 
-
-if $0 !~ /spec$/
+	$all_instances = EC2Instances.new
 
 	# Command names
 	begin

@@ -1,0 +1,15 @@
+--- 
+new_instance_defaults: 
+  zone: us-east-1c
+  access_groups: 
+  - default
+  ami: ami-6i06f309
+  size: t1.micro
+  key: foofoofoo
+default_user: ubuntu
+custom_commands: 
+  RemoteCommands: ~/.ec2_remote_commands
+ssh_key_path: /www/aboutus/secrets/aws
+access_key: ASDFASDFASFASDFASDF
+web_browser: /Applications/Firefox.app
+secret_access_key: sdfJKLKJo0o090KKKjkjjjlkjkljl000
