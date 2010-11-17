@@ -9,7 +9,7 @@ new_instance_defaults:
 default_user: ubuntu
 custom_commands: 
   RemoteCommands: ~/.ec2_remote_commands
-ssh_key_path: /www/aboutus/secrets/aws
+ssh_key_path: /tmp
 access_key: ASDFASDFASFASDFASDF
 web_browser: /Applications/Firefox.app
 secret_access_key: sdfJKLKJo0o090KKKjkjjjlkjkljl000

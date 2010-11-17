@@ -1,4 +1,4 @@
-load 'ec2'
+load File.expand_path(File.join(File.dirname(__FILE__), "..", 'ec2'))
 
 describe SDB do
 

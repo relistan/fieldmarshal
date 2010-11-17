@@ -1,5 +1,5 @@
 load File.expand_path(File.join(File.dirname(__FILE__), '..', 'ec2'))
-require 'YAML'
+require 'yaml'
 require 'mocha'
 
 describe EC2Instances do
@@ -8,7 +8,7 @@ describe EC2Instances do
 		@fake_entries = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "info"))
 		$config = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "ec2rc"))
 		sdb_query = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "sdb_query"))
-		SDB.any_instance.stubs(:get_attributes => @fake_entries['i-a10d81ca'], 
+		SDB.any_instance.stubs(:get_attributes => @fake_entries['i-19028f70'], 
 				:get_all => sdb_query,
 				:delete_attributes => nil,
 				:put_attributes => nil,
@@ -35,11 +35,11 @@ describe EC2Instances do
 	end
 
 	it "should return individual instance information" do
-		@all_instances.get_instance("i-27f2294c").class.should be(EC2Instance)
+		@all_instances.get_instance("i-19028f70").class.should be(EC2Instance)
 	end
 
 	it "should return the AWS id for a custom name" do
-		@all_instances.id_for_name("blog").should == 'i-a10d81ca'
+		@all_instances.id_for_name("blog").should == 'i-19028f70'
 	end
 
 	it "should return a hash for mapping ids to names" do
@@ -47,8 +47,8 @@ describe EC2Instances do
 	end
 
 	it "should map hostnames to ips" do
-		instance = @all_instances.get_instance("i-27f2294c")['dns_name']
-		@all_instances.hostname_to_ip(instance).should == '174.129.202.215'
+		ip = @all_instances.get_instance("i-19028f70").dns_name
+		@all_instances.hostname_to_ip(ip).should == '14.43.96.210'
 	end
 
 end

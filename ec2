@@ -178,7 +178,7 @@ class EC2Instances
 		return if name.nil?
 
 		attrs = sdb.get_attributes(name)
-		return attrs['aws_instance_id']
+		return attrs['aws_instance_id'] ? attrs['aws_instance_id'] : attrs[:aws_instance_id]
 	end
 
 	def name_instance name, instance_id
@@ -240,11 +240,11 @@ class EC2Instance < Hash
 	end
 
 	def aws_id
-		self[:aws_instance_id]
+		self.aws_instance_id
 	end
 
 	def name
-		$all_instances.ids_to_names[aws_instance_id] || aws_instance_id
+		$all_instances.ids_to_names[aws_id] || self.aws_id
 	end
 
 	def key
@@ -286,12 +286,12 @@ class EC2Instance < Hash
 	end
 
 	def running?
-		self[:aws_state] == "running"	
+		self.aws_state == "running"	
 	end
 
 	def method_missing(method, *params)
-		method = method.to_sym
-		return self[method] if self.keys.collect(&:to_sym).include?(method)
+		return self[method] if self[method] 
+		return self[method.to_sym] if self[method.to_sym] 
 		super
 	end
 end
@@ -334,15 +334,15 @@ class EC2Command
 		puts "-"*95
 		all = info.keys.map do |key|
 			entry = info[key]
-			name = $all_instances.ids_to_names[entry[:aws_instance_id]] ?
-				$all_instances.ids_to_names[entry[:aws_instance_id]] : entry[:aws_instance_id]
+			name = $all_instances.ids_to_names[entry.aws_id] ?
+				$all_instances.ids_to_names[entry.aws_id] : entry.aws_id
 			[
 				sprintf("%-15s", entry.running? ? name : "*#{name}"),
-				entry[:aws_image_id],
-				sprintf("%13s", entry[:ssh_key_name]),
-				entry[:aws_instance_type],
-				entry[:aws_launch_time].gsub!(/T.*$/, ''),
-				$all_instances.hostname_to_ip(entry[:dns_name])
+				entry.aws_image_id,
+				sprintf("%13s", entry.ssh_key_name),
+				entry.aws_instance_type,
+				entry.aws_launch_time.gsub!(/T.*$/, ''),
+				$all_instances.hostname_to_ip(entry.dns_name)
 			]
 		end
 
