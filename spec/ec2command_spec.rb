@@ -21,7 +21,7 @@ describe EC2Command do
 		@command = EC2Command.new
 	end
 
-	before :each do
+	after :each do
 		$io = StringIO.new("")
 	end
 
@@ -40,11 +40,32 @@ describe EC2Command do
 		$io.string.should include('blog')
 	end
 
-	it "should try to connect over ssh" do
-		$all_instances.stubs(:get_instance).returns(@fake_entries[@fake_entries.keys.first])
+	it "should connect over ssh" do
+		$all_instances.stubs(:get_instance).returns(@fake_entries['i-19028f70'])
 		EC2Instance.any_instance.stubs(:key).returns("somekey.pem")
 		@command.ssh(["blog"])
-		$io.string.should == "ssh -i somekey.pem ubuntu@ec2-174-129-74-98.compute-1.amazonaws.com \n"
+		$io.string.should == "ssh -i somekey.pem ubuntu@ec2-14-43-96-210.compute-1.amazonaws.com \n"
 	end
+
+	it "should copy files over scp" do
+		$all_instances.stubs(:get_instance).returns(@fake_entries['i-19028f70'])
+		EC2Instance.any_instance.stubs(:key).returns("somekey.pem")
+		@command.scp(["somefile", "ubuntu@blog:sadf"])
+		$io.string.should_not include("blog")
+	end
+
+	it "should launch a web browser" do
+		$all_instances.stubs(:get_instance).returns(@fake_entries['i-19028f70'])
+		EC2Instance.any_instance.stubs(:key).returns("somekey.pem")
+		@command.http(["blog"])
+		$io.string.should include("http://#{@fake_entries['i-19028f70'].dns_name}")
+	end
+
+	it "should generate its own config file and start an editor" do
+		ENV['EDITOR'] = 'vim'
+		@command.config([])
+		$io.string.should include("vim")
+	end
+
 
 end

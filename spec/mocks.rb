@@ -6,6 +6,10 @@ class EC2Command
 	def puts *args
 		$io.puts *args
 	end
+
+	def exec *args
+		$io.puts *args
+	end
 end
 
 class EC2Instance

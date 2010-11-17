@@ -39,6 +39,6 @@ describe EC2Instances do
 	it "should try to ssh to the host" do
 		@instance.stubs(:key).returns("somekey.pem")
 		@instance.ssh(['ls'])
-		$io.string.should == "ssh -i somekey.pem ubuntu@ec2-174-129-74-98.compute-1.amazonaws.com \nssh -i somekey.pem ubuntu@ec2-14-43-96-210.compute-1.amazonaws.com \n"
+		$io.string.should == "ssh -i somekey.pem ubuntu@ec2-14-43-96-210.compute-1.amazonaws.com \n"
 	end
 end
