@@ -1,6 +1,5 @@
 load File.expand_path(File.join(File.dirname(__FILE__), '..', 'ec2'))
 require 'yaml'
-require 'mocha'
 
 describe EC2Instances do
 
@@ -8,14 +7,11 @@ describe EC2Instances do
 		@fake_entries = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "info"))
 		$config = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "ec2rc"))
 		sdb_query = YAML.load_file(File.join(File.dirname(__FILE__), "fixtures", "sdb_query"))
-		SDB.any_instance.stubs(:get_attributes => @fake_entries['i-19028f70'], 
-				:get_all => sdb_query,
-				:delete_attributes => nil,
-				:put_attributes => nil,
-				:sdb_domain => nil)
 		@all_instances = EC2Instances.new
+		@all_instances.sdb.stub!(:get_attributes).and_return(@fake_entries['i-19028f70'])
+		@all_instances.sdb.stub!(:get_all).and_return(sdb_query)
 		@all_instances.flush # No caching!
-		@all_instances.stubs(:info).returns(@fake_entries)
+		@all_instances.stub!(:info).and_return(@fake_entries)
 	end
 
 	after :all do
