@@ -248,7 +248,6 @@ class EC2Instance < Hash
 	end
 
 	def key
-	    return "/www/aboutus/secrets/aws/skeleton.pem"
 		path = File.expand_path $config['ssh_key_path']
 
 		if File.exist?(File.join(path, ssh_key_name))
