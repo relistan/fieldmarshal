@@ -1,3 +1,11 @@
+# Here Be Dragons!
+
+This project hasn't been updated in awhile. OpsCode Chef's Knife EC2
+tools obsolete most of this functionality.  This is primarily of
+interest for posterity at this point.
+
+Thanks to everyone who used it!
+
 # fieldmarshal
 
 ### Functionality
